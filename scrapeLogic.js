@@ -1,7 +1,7 @@
 const puppeteer = require("puppeteer");
 require("dotenv").config();
 
-const scrapeLogic = async (res) => {
+const search = async (req, res) => {
   const browser = await puppeteer.launch({
     args: [
       "--disable-setuid-sandbox",
@@ -18,28 +18,69 @@ const scrapeLogic = async (res) => {
     const page = await browser.newPage();
 
     await page.goto("https://developer.chrome.com/");
+  }
+  catch (e) {
+    console.error(e);
+    res.send(`Something went wrong while running Puppeteer: ${e}`);
+  } finally {
+    await browser.close();
+  }
+};
 
-    // Set screen size
-    await page.setViewport({ width: 1080, height: 1024 });
+const scrapeLogic = async (req, res) => {
+  const browser = await puppeteer.launch({
+    args: [
+      "--disable-setuid-sandbox",
+      "--no-sandbox",
+      "--single-process",
+      "--no-zygote",
+    ],
+    executablePath:
+      process.env.NODE_ENV === "production"
+        ? process.env.PUPPETEER_EXECUTABLE_PATH
+        : puppeteer.executablePath(),
+  });
+  try {
+    // Get query
+    const query = req.query;
 
-    // Type into search box
-    await page.type(".search-box__input", "automate beyond recorder");
+    var queryString = "";
+    Object.entries(query).forEach(queryElement => {
+      if (Array.isArray(queryElement[1])) {
+        queryElement[1].forEach(element => {
+          queryString += (queryElement[0] + "[]=" + element + "&");
+        })
+      }
+      else {
+        queryString += (queryElement[0] + "=" + queryElement[1] + "&");
+      }
+    });
 
-    // Wait and click on first result
-    const searchResultSelector = ".search-box__link";
-    await page.waitForSelector(searchResultSelector);
-    await page.click(searchResultSelector);
+    console.log(queryString);
 
-    // Locate the full title with a unique string
-    const textSelector = await page.waitForSelector(
-      "text/Customize and automate"
-    );
-    const fullTitle = await textSelector.evaluate((el) => el.textContent);
+    const page = await browser.newPage();
 
-    // Print the full title
-    const logStatement = `The title of this blog post is ${fullTitle}`;
-    console.log(logStatement);
-    res.send(logStatement);
+    // Go to the target website
+    await page.goto(`https://www.vinted.it/catalog?${queryString}`, { waitUntil: 'networkidle2' });
+
+    // Wait for a specific element to ensure all data has loaded
+    await page.waitForSelector('[data-testid^="product-item"]');
+ 
+    // Evaluate the page content and extract the desired information
+    const items = await page.evaluate(() => {
+      const elements = document.querySelectorAll('div.new-item-box__container[data-testid^=product-item-id]');
+      return Array.from(elements).map(element => ({
+        title: element.children[1].children[0].children[0].children[0].alt.trim().split(", ")[0],
+        price: element.children[1].children[0].children[0].children[0].alt.trim().split(", ")[1],
+        image: element.children[1].children[0].children[0].children[0].src,
+        // Double href so that it works when the a tag is in the position 1 or 2
+        link: element.children[1].children[1].href,
+        link: element.children[1].children[2].href
+      }));
+    });
+
+    // Send the extracted information as JSON
+    res.json(items);
   } catch (e) {
     console.error(e);
     res.send(`Something went wrong while running Puppeteer: ${e}`);
@@ -48,4 +89,4 @@ const scrapeLogic = async (res) => {
   }
 };
 
-module.exports = { scrapeLogic };
+module.exports = { search, scrapeLogic };
