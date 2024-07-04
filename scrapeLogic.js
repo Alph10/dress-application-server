@@ -59,6 +59,8 @@ const scrapeLogic = async (req, res) => {
     console.log(queryString);
 
     const page = await browser.newPage();
+    page.setDefaultTimeout(2*60*1000);
+    console.log(page);
 
     // Go to the target website
     await page.goto(`https://www.vinted.it/catalog?${queryString}`, { waitUntil: 'networkidle2' });
