@@ -56,11 +56,10 @@ const search = async (req, res) => {
       }
     });
 
-    console.log(queryString);
+    console.log("/search", queryString);
 
     const page = await browser.newPage();
     page.setDefaultTimeout(2*60*1000);
-    console.log(page);
 
     // Go to the target website
     await page.goto(`https://www.vinted.it/catalog?${queryString}`, { waitUntil: 'networkidle2' });
@@ -107,6 +106,8 @@ const brands = async (req, res) => {
         : puppeteer.executablePath(),
   });
   try {
+    console.log("/brands");
+
     const page = await browser.newPage();
     page.setDefaultTimeout(3*60*1000);
     await page.setViewport({width: 640, height:480})
@@ -137,7 +138,7 @@ const brands = async (req, res) => {
       return Array.from(elements).map(element => ({
         name: element.children[0].children[0].children[0].children[0].textContent,
         id: element.id.slice(element.id.lastIndexOf("-")+1, element.id.length)
-      }));
+      }));A
     });
 
     // Send the extracted information as JSON
