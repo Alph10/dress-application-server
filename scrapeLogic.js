@@ -92,6 +92,7 @@ const search = async (req, res) => {
 
 const brands = async (req, res) => {
   const browser = await puppeteer.launch({
+    defaultViewport: false,
     args: [
       "--disable-setuid-sandbox",
       "--no-sandbox",
@@ -104,48 +105,45 @@ const brands = async (req, res) => {
         : puppeteer.executablePath(),
   });
   try {
-    // Get query
-    const query = req.query;
-
-    var queryString = "";
-    Object.entries(query).forEach(queryElement => {
-      if (Array.isArray(queryElement[1])) {
-        queryElement[1].forEach(element => {
-          queryString += (queryElement[0] + "[]=" + element + "&");
-        })
-      }
-      else {
-        queryString += (queryElement[0] + "=" + queryElement[1] + "&");
-      }
-    });
-
-    console.log("/search", queryString);
+    console.log("/brands");
 
     const page = await browser.newPage();
-    page.setDefaultTimeout(2*60*1000);
+    page.setDefaultTimeout(3*60*1000);
+    await page.setViewport({width: 640, height:480})
 
     // Go to the target website
-    await page.goto(`https://www.vinted.it/catalog?${queryString}`, { waitUntil: 'networkidle2' });
+    await page.goto(`https://www.vinted.it/catalog`, { waitUntil: 'networkidle2' });
+    await page.waitForNavigation();
 
-    // Wait for a specific element to ensure all data has loaded
-    await page.waitForSelector('[data-testid^="product-item"]');
- 
+    const rejectCookie = await page.waitForSelector('#onetrust-reject-all-handler');
+    if(rejectCookie) {
+      await rejectCookie.click();
+    }
+
+    await page.waitForSelector('button[data-testid="trigger"]'); //Filters
+    await page.evaluate(() => {
+      document.querySelector('button[data-testid="trigger"]').click();
+    });
+
+    await page.waitForSelector('[data-testid="modal"]>div:nth-child(2)>div:nth-child(5)>div'); // Brands
+    await page.evaluate(() => {
+      document.querySelector('[data-testid="modal"]>div:nth-child(2)>div:nth-child(5)>div').click();
+    });
+
     // Evaluate the page content and extract the desired information
+    await page.waitForSelector('ul.pile>li span.web_ui__Text__title'); // Brand list
     const items = await page.evaluate(() => {
-      const elements = document.querySelectorAll('div.new-item-box__container[data-testid^=product-item-id]');
+      const elements = document.querySelectorAll('ul.pile>li>div>div');
       return Array.from(elements).map(element => ({
-        title: element.children[1].children[0].children[0].children[0].alt.trim().split(", ")[0],
-        price: element.children[1].children[0].children[0].children[0].alt.trim().split(", ")[1],
-        image: element.children[1].children[0].children[0].children[0].src,
-        // Double href so that it works when the a tag is in the position 1 or 2
-        link: element.children[1].children[1].href,
-        link: element.children[1].children[2].href
-      }));
+        name: element.children[0].children[0].children[0].children[0].textContent,
+        id: element.id.slice(element.id.lastIndexOf("-")+1, element.id.length)
+      }));A
     });
 
     // Send the extracted information as JSON
     res.json(items);
-  } catch (e) {
+  }
+  catch (e) {
     console.error(e);
     res.send(`Something went wrong while running Puppeteer: ${e}`);
   } finally {
