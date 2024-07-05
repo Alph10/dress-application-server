@@ -113,7 +113,6 @@ const brands = async (req, res) => {
 
     // Go to the target website
     await page.goto(`https://www.vinted.it/catalog`, { waitUntil: 'networkidle2' });
-    await page.waitForNavigation();
 
     const rejectCookie = await page.waitForSelector('#onetrust-reject-all-handler');
     if(rejectCookie) {
